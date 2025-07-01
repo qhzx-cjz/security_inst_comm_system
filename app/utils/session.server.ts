@@ -1,68 +1,68 @@
 // app/utils/session.server.ts
-
 import { createCookie, redirect } from "@remix-run/node";
+import jwt from 'jsonwebtoken';
 
-// 1. 创建一个安全的、HttpOnly的cookie来存储session token
-// 在真实项目中，secrets应该是从环境变量中读取的复杂字符串
-const sessionCookie = createCookie("session", {
-  secrets: ["s3cr3t"],
+// --- 终极调试日志 ---
+// 这段代码在模块加载时就会执行，能告诉我们环境变量是否被正确加载
+console.log("\n[SESSION_SERVER.TS] 模块加载时, process.env.JWT_SECRET 的值是:", process.env.JWT_SECRET);
+// --------------------
+
+const jwtSecret = process.env.JWT_SECRET;
+
+// 为了防止程序因secret不存在而崩溃，我们提供一个备用值
+const cookieSecrets = jwtSecret ? [jwtSecret] : ["fallback-secret-for-dev"];
+if (!jwtSecret) {
+  console.error("[警告!] JWT_SECRET 未在 .env 文件中定义或加载，正在使用备用密钥！这在生产环境中是不安全的！");
+}
+
+const sessionCookie = createCookie("session-token", {
+  secrets: cookieSecrets,
   httpOnly: true,
-  maxAge: 60 * 60 * 24 * 30, // 30 days
+  maxAge: 60 * 60 * 24,
   path: "/",
   sameSite: "lax",
 });
 
-// 这个函数会从我们刚刚创建的HttpOnly cookie中读取token
-async function getToken(request: Request) {
-  const cookieHeader = request.headers.get("Cookie");
-  const cookie = (await sessionCookie.parse(cookieHeader)) || {};
-  return cookie.token;
+export async function createUserSession(accessToken: string, redirectTo: string) {
+  console.log("[createUserSession] 函数被调用");
+  try {
+    if (!accessToken) {
+      throw new Error("传入 createUserSession 的 accessToken 为空或无效");
+    }
+    
+    console.log("[createUserSession] 准备序列化cookie...");
+    const cookieValue = await sessionCookie.serialize(accessToken);
+    console.log("[createUserSession] Cookie序列化成功, 准备重定向...");
+    
+    return redirect(redirectTo, {
+      headers: {
+        "Set-Cookie": cookieValue,
+      },
+    });
+  } catch (error) {
+    console.error("\n--- createUserSession 中发生致命错误！---\n", error);
+    // 抛出错误，让上层action的catch块处理
+    throw error;
+  }
 }
 
-// 核心：这个函数现在体现了BFF模式
-export async function getSessionUser(request: Request) {
-  const token = await getToken(request);
-  if (!token) {
-    return null; // 用户未登录
+// getSessionUser 和 logout 函数保持不变
+export async function getSessionUser(request: Request): Promise<{ username: string } | null> {
+  const cookieString = request.headers.get("Cookie");
+  const accessToken = await sessionCookie.parse(cookieString);
+
+  if (!accessToken || typeof accessToken !== 'string' || !jwtSecret) {
+    return null;
   }
 
   try {
-    // 2. Remix服务器(BFF)调用您的主后端API来验证token并获取用户状态
-    // <<< 在这里替换为您的后端API地址 >>>
-    const response = await fetch("http://localhost:8080/api/auth/status", {
-      headers: {
-        // 将token转发给后端API
-        "Authorization": `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      // 如果token无效或过期，API会返回401/403，我们也认为用户未登录
-      return null;
-    }
-
-    // 3. API验证成功，返回用户信息
-    const user = await response.json();
-    return user;
-
+    const payload = jwt.verify(accessToken, jwtSecret) as { sub: string };
+    return { username: payload.sub };
   } catch (error) {
-    // 如果后端API无法连接，也视为未登录
-    console.error("Failed to fetch user status from API", error);
     return null;
   }
 }
 
-// 登录成功后，action中需要调用这个函数来设置cookie
-export async function createUserSession(token: string, redirectTo: string) {
-  const cookie = await sessionCookie.serialize({ token });
-  return redirect(redirectTo, {
-    headers: {
-      "Set-Cookie": cookie,
-    },
-  });
-}
-
-// 登出函数现在需要清除cookie
 export async function logout(request: Request) {
   return redirect("/auth", {
     headers: {
