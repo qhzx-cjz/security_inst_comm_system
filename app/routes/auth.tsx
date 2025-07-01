@@ -80,7 +80,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         error: "两次输入的密码不一致",
       }, { status: 400 });
     }
-
+    
     try {
       // 1. 调用您的后端注册API
       // <<< 在这里替换为您的后端API地址 >>>
