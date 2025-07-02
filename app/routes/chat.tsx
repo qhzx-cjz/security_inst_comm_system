@@ -1,29 +1,22 @@
 // app/routes/chat.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { json, redirect, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { Menu } from 'lucide-react';
 
-// 导入您的组件和UI库
 import ChatInterface from '~/components/ChatInterface';
 import FriendsList from '~/components/FriendList';
 import { Button } from '~/components/ui/button';
-import { getSessionUser } from '~/utils/session.server';
+import { getSessionUser, getAuthToken } from '~/utils/session.server';
 
-// --- 类型定义 ---
-// 最佳实践是将这些类型移动到 app/types.ts 文件中
+// --- 类型定义 (建议放在 app/types.ts) ---
 export interface Friend {
-  id: string;
+  id: string; // 用户名作为ID
   name: string;
   avatar: string;
   isOnline: boolean;
-  lastSeen?: string;
-  lastMessage?: {
-    content: string;
-    timestamp: string;
-    isRead: boolean;
-  };
+  lastMessage?: { content: string; timestamp: string; isRead: boolean; };
 }
 
 export interface Message {
@@ -34,113 +27,151 @@ export interface Message {
 }
 
 // --- 服务器端 Loader ---
-// 这个函数会在页面加载前在服务器上运行
 export async function loader({ request }: LoaderFunctionArgs) {
   const sessionUser = await getSessionUser(request);
   if (!sessionUser) {
-    // 如果用户未登录，重定向到登录页面
     return redirect("/auth");
   }
-  // 将用户信息传递给前端组件
-  return json({ user: sessionUser });
+
+  const token = await getAuthToken(request);
+  if (!token) {
+    // 理论上用户已登录，token必定存在
+    return redirect("/auth");
+  }
+
+  // 从后端API获取初始在线用户列表
+  let initialFriends: Friend[] = [];
+  try {
+    const response = await fetch("http://127.0.0.1:8000/api/users/online", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      initialFriends = data.users.map(u => ({
+        id: u.username,
+        name: u.username,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username}`,
+        isOnline: u.status === 'online',
+      }));
+    }
+  } catch (error) {
+    console.error("Failed to fetch online friends:", error);
+  }
+
+  return json({ user: sessionUser, initialFriends, token });
 }
 
-
 // --- 页面主组件 ---
-// 我们将您在 index.tsx 中编写的 ChatPage 组件作为这里的默认导出
 export default function ChatRoute() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, initialFriends, token } = useLoaderData<typeof loader>();
+  const ws = useRef<WebSocket | null>(null);
 
-  // --- 您提供的所有状态和模拟数据 ---
-  const mockFriends: Friend[] = [
-    { id: '1', name: 'Alex Johnson', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex', isOnline: true, lastMessage: { content: 'Hey! How are you doing?', timestamp: '10:30 AM', isRead: true } },
-    { id: '2', name: 'Sarah Smith', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', isOnline: true, lastMessage: { content: 'Can we meet tomorrow?', timestamp: '9:45 AM', isRead: false } },
-    { id: '3', name: 'Mike Chen', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike', isOnline: false, lastSeen: '2 hours ago', lastMessage: { content: 'I will send you the documents later', timestamp: 'Yesterday', isRead: true } },
-  ];
-
-  const initialMessages: Record<string, Message[]> = {
-    '1': [
-      { id: '101', senderId: '1', content: 'Hey! How are you doing?', timestamp: '10:30 AM' },
-      { id: '102', senderId: 'me', content: 'I am good, thanks! How about you?', timestamp: '10:32 AM' },
-    ],
-    '2': [
-      { id: '201', senderId: '2', content: 'Can we meet tomorrow?', timestamp: '9:45 AM' },
-    ],
-  };
-
+  // --- 状态管理 ---
+  const [friends, setFriends] = useState<Friend[]>(initialFriends);
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(mockFriends[0]);
-  const [friends, setFriends] = useState<Friend[]>(mockFriends);
-  const [messages, setMessages] = useState<Record<string, Message[]>>(initialMessages);
-  
-  // 移动端响应式处理
+
+  // --- 实时通信 Effect ---
   useEffect(() => {
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 768);
+    if (!token) return;
+
+    const wsUrl = `ws://127.0.0.1:8000/ws?token=${token}`;
+    ws.current = new WebSocket(wsUrl);
+
+    ws.current.onopen = () => console.log("✅ WebSocket connection established");
+    ws.current.onclose = () => console.log("❌ WebSocket connection closed");
+    ws.current.onerror = (err) => console.error("WebSocket error:", err);
+
+    ws.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log("WebSocket 收到消息:", data);
+
+      switch (data.type) {
+        case 'message:receive':
+          // TODO: 在这里解密 data.payload.encryptedContent
+          const decryptedContent = data.payload.encryptedContent; // 临时做法
+          
+          const newMessage: Message = {
+            id: new Date().toISOString(),
+            senderId: data.payload.from,
+            content: decryptedContent,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          
+          // 更新消息列表
+          setMessages(prev => ({
+            ...prev,
+            [data.payload.from]: [...(prev[data.payload.from] || []), newMessage],
+          }));
+          
+          // 更新好友列表的最后一条消息
+          setFriends(prevFriends => prevFriends.map(f => f.id === data.payload.from ? {
+            ...f,
+            lastMessage: { content: decryptedContent, timestamp: newMessage.timestamp, isRead: f.id !== selectedFriend?.id }
+          } : f));
+          break;
+        
+        // TODO: 在后端实现 user:online 和 user:offline 事件的广播
+      }
     };
+
+    // 组件卸载时关闭连接
+    return () => ws.current?.close();
+  }, [token, selectedFriend?.id]); // 依赖token和当前选中的好友
+
+  // 移动端响应式
+  useEffect(() => {
+    const handleResize = () => setSidebarOpen(window.innerWidth >= 768);
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- 您提供的所有事件处理函数 ---
-  const handleFriendSelect = (friend: Friend) => {
-    setSelectedFriend(friend);
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
-  };
-
+  // --- 事件处理函数 ---
   const handleSendMessage = (content: string) => {
-    if (!selectedFriend) return;
+    if (!selectedFriend || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
     
-    const newMessage: Message = {
-      id: `${Date.now()}`,
-      senderId: 'me',
-      content,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    // TODO: 在这里加密 content
+    const encryptedContent = content; // 临时做法
+
+    const messagePayload = {
+      type: "message:send",
+      payload: { to: selectedFriend.id, encryptedContent },
     };
     
-    // 这个逻辑会立刻更新UI，修复了“发送后没反应”的问题
+    ws.current.send(JSON.stringify(messagePayload));
+
+    // 立即在UI上显示自己发送的消息
+    const ownMessage: Message = {
+      id: new Date().toISOString(),
+      senderId: user.username, // 使用当前登录用户的用户名
+      content: content,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
     setMessages(prev => ({
       ...prev,
-      [selectedFriend.id]: [...(prev[selectedFriend.id] || []), newMessage],
+      [selectedFriend.id]: [...(prev[selectedFriend.id] || []), ownMessage],
     }));
+    setFriends(prevFriends => prevFriends.map(f => f.id === selectedFriend.id ? {
+      ...f,
+      lastMessage: { content, timestamp: ownMessage.timestamp, isRead: true }
+    } : f));
   };
 
-  const handleSearchFriend = (query: string) => {
-    if (!query.trim()) {
-      setFriends(mockFriends);
-      return;
-    }
-    const filteredFriends = mockFriends.filter(friend => 
-      friend.name.toLowerCase().includes(query.toLowerCase())
-    );
-    setFriends(filteredFriends);
-  };
-
-  const handleAddFriend = (name: string) => {
-    // ... (您的添加好友逻辑)
-  };
-
-  // --- 最终的 JSX 布局 ---
-  // 使用了 flex 和 h-[calc(...)] 来确保布局在导航栏下正确显示
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-gray-100">
-      {/* 侧边栏好友列表 */}
       <FriendsList 
         friends={friends} 
         selectedFriend={selectedFriend} 
-        onSelectFriend={handleFriendSelect} 
+        onSelectFriend={(friend) => setSelectedFriend(friend)} 
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        onSearch={handleSearchFriend}
-        onAddFriend={handleAddFriend}
+        onSearch={(q) => console.log("Searching:", q)} // TODO: 实现搜索
+        onAddFriend={(name) => console.log("Adding:", name)} // TODO: 实现添加好友
       />
 
-      {/* 主聊天区 */}
-      <div className="flex-1 flex flex-col min-w-0"> {/* min-w-0 修复flex布局溢出问题 */}
-        {/* 移动端菜单按钮 */}
+      <div className="flex-1 flex flex-col min-w-0">
         {!sidebarOpen && (
           <div className="p-2 md:hidden border-b bg-white">
             <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
@@ -157,7 +188,7 @@ export default function ChatRoute() {
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
-            <p>Select a friend to start chatting</p>
+            <p>选择一个好友开始聊天</p>
           </div>
         )}
       </div>
