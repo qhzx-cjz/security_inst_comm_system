@@ -62,7 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
         throw new Error("从后端返回的数据中未找到 accessToken");
       }
 
-      return await createUserSession(accessToken, "/");
+      return await createUserSession(accessToken, "/chat");
 
     }
     
@@ -74,7 +74,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
-// UI组件部分无需修改
+// UI组件部分
 export default function AuthenticationPage() {
   const actionData = useActionData<ActionResponse>();
   return (
@@ -94,9 +94,6 @@ export default function AuthenticationPage() {
               <Form method="post" className="space-y-4">
                 {actionData?.actionType === 'login' && !actionData.ok && (
                   <p className="text-sm text-red-500">{actionData.error}</p>
-                )}
-                {actionData?.actionType === 'register' && actionData.ok && (
-                  <p className="text-sm text-green-500">注册成功！现在您可以登录了。</p>
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="login-username">用户名</Label>
@@ -133,6 +130,9 @@ export default function AuthenticationPage() {
                 </div>
                 {actionData?.actionType === 'register' && !actionData.ok && (
                   <p className="text-sm text-red-500">{actionData.error}</p>
+                )}
+                {actionData?.actionType === 'register' && actionData.ok && (
+                  <p className="text-sm text-green-500">注册成功！现在您可以登录了。</p>
                 )}
                 <Button type="submit" name="_action" value="register" className="w-full">创建账户</Button>
               </Form>
