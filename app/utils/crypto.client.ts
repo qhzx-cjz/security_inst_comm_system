@@ -194,3 +194,53 @@ export async function encryptFile(file: File, publicKeyPem: string) {
     encryptedKey: new Blob([new Uint8Array(encryptedSymmetricKey)]),
   };
 }
+
+/**
+ * [新增] 使用混合解密来解密文件。
+ * 该函数是encryptFile的逆向操作，用于恢复加密文件。
+ * @param encryptedFileBlob 包含初始化向量(IV)和加密内容的文件Blob。
+ * @param encryptedKeyArrayBuffer 加密后的对称密钥，格式为ArrayBuffer。
+ * @returns {Promise<Blob>} 返回一个包含解密后文件数据的Blob对象。
+ */
+export async function decryptFile(encryptedFileBlob: Blob, encryptedKeyArrayBuffer: ArrayBuffer): Promise<Blob> {
+  // 步骤1：获取存储在本地的RSA私钥，用于解密对称密钥。
+  const privateKey = await getPrivateKey();
+  if (!privateKey) {
+    // 如果无法获取私钥，则抛出错误，终止解密过程。
+    throw new Error("无法加载私钥，文件解密失败。");
+  }
+
+  // 步骤2：使用RSA私钥解密AES对称密钥。
+  // 这是混合加密方案的关键步骤，用非对称加密来安全地传输对称密钥。
+  const decryptedSymmetricKeyBuffer = await window.crypto.subtle.decrypt(
+    { name: "RSA-OAEP" },
+    privateKey,
+    encryptedKeyArrayBuffer
+  );
+
+  // 步骤3：将解密后的原始密钥数据导入为Web Crypto API可用的CryptoKey对象。
+  // 这样我们就可以用它来执行AES解密操作。
+  const symmetricKey = await window.crypto.subtle.importKey(
+    "raw",
+    decryptedSymmetricKeyBuffer,
+    { name: "AES-GCM" }, // 指定算法为AES-GCM，与加密时保持一致。
+    true, // 密钥可导出（虽然这里没用上，但通常设为true）。
+    ["decrypt"] // 密钥用途声明为解密。
+  );
+
+  // 步骤4：从加密文件Blob中分离出IV和实际的加密数据。
+  const encryptedFileBuffer = await encryptedFileBlob.arrayBuffer();
+  const iv = encryptedFileBuffer.slice(0, 12); // 根据encryptFile的实现，IV是文件的前12个字节。
+  const encryptedData = encryptedFileBuffer.slice(12); // 剩余部分是使用AES-GCM加密的文件内容。
+
+  // 步骤5：使用AES对称密钥和IV来解密文件数据。
+  const decryptedFileBuffer = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: new Uint8Array(iv) }, // 提供与加密时相同的IV。
+    symmetricKey, // 提供解密后的对称密钥。
+    encryptedData // 提供要解密的加密数据。
+  );
+
+  // 步骤6：将解密后的ArrayBuffer数据包装成一个Blob对象并返回。
+  // 这个Blob可以用于创建下载链接或在浏览器中显示。
+  return new Blob([decryptedFileBuffer]);
+}
