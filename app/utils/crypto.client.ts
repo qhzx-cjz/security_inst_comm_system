@@ -137,6 +137,7 @@ export async function encryptMessage(text: string, publicKeyPem: string): Promis
  * @returns 解密后的字符串
  */
 export async function decryptMessage(encryptedMessageBase64: string): Promise<string> {
+  try {
     const privateKey = await getPrivateKey();
     if (!privateKey) {
       throw new Error("无法加载私钥，解密失败");
@@ -148,8 +149,11 @@ export async function decryptMessage(encryptedMessageBase64: string): Promise<st
       encryptedBuffer
     );
     return new TextDecoder().decode(decryptedBuffer);
+  } catch (error) {
+    console.error('解密失败:', error);
+    return '无法解密此消息';
+  }
 }
-
 
 /**
  * 使用混合加密来加密文件 (保留原有功能)

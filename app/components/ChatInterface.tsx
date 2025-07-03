@@ -3,19 +3,31 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
-import { Send, Paperclip} from 'lucide-react';
-import type { Friend, Message } from '~/routes/chat'; // 从chat.tsx导入类型
+import { Send, Paperclip, File as FileIcon } from 'lucide-react';
+import type { Friend, Message, File } from '~/routes/chat'; // 从chat.tsx导入类型
+
+// 新增：一个辅助函数，用于将文件大小格式化为可读字符串
+function formatBytes(bytes: number, decimals = 2) {
+  if (!+bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
 
 interface ChatInterfaceProps {
   friend: Friend;
   messages: Message[];
   onSendMessage: (content: string) => void;
+  onFileSelect: (file: File) => void;
   user: { username: string }; // 新增：接收当前登录的用户信息
 }
 
-export default function ChatInterface({ friend, messages, user, onSendMessage }: ChatInterfaceProps) {
+export default function ChatInterface({ friend, messages, user, onSendMessage, onFileSelect }: ChatInterfaceProps) {
   const [messageText, setMessageText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 消息变化时自动滚动到底部
   useEffect(() => {
@@ -34,6 +46,17 @@ export default function ChatInterface({ friend, messages, user, onSendMessage }:
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      onFileSelect(file); // 如果用户选择了文件，则调用父组件传来的回调函数
+    }
+  };
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click(); // 以编程方式触发隐藏文件输入框的点击事件
   };
 
   return (
@@ -59,18 +82,35 @@ export default function ChatInterface({ friend, messages, user, onSendMessage }:
             
             return (
               <div key={message.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                <div 
-                  className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
-                    isMe 
-                      ? 'bg-primary text-primary-foreground rounded-br-none' // 我发出的消息：深色背景，白色文字
-                      : 'bg-card text-card-foreground rounded-bl-none'      // 接收到的消息：白色背景，深色文字
-                  }`}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <span className={`text-xs mt-1 block text-right opacity-70`}>
-                    {message.timestamp}
-                  </span>
-                </div>
+                {message.type === 'file' && message.file ? (
+                  // 文件消息气泡
+                  <a 
+                    href={message.file.blobUrl}
+                    download={message.file.fileName}
+                    className={`flex items-center gap-3 p-3 cursor-pointer ${!message.file.blobUrl ? 'opacity-50 pointer-events-none' : ''}`}
+                    title={message.file.blobUrl ? `Download ${message.file.fileName}` : 'File processing...'}
+                  >
+                    <FileIcon className="h-10 w-10 flex-shrink-0" />
+                    <div className="flex-1 overflow-hidden">
+                      <p className="text-sm font-medium truncate">{message.file.fileName}</p>
+                      <p className="text-xs opacity-80">{formatBytes(message.file.fileSize)}</p>
+                    </div>
+                  </a>
+                ) : (
+                  // 文本消息气泡
+                  <div 
+                    className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
+                      isMe 
+                        ? 'bg-primary text-primary-foreground rounded-br-none' // 我发出的消息：深色背景，白色文字
+                        : 'bg-card text-card-foreground rounded-bl-none'      // 接收到的消息：白色背景，深色文字
+                    }`}
+                  >
+                    <p className="text-sm">{message.content}</p>
+                    <span className={`text-xs mt-1 block text-right opacity-70`}>
+                      {message.timestamp}
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -80,6 +120,12 @@ export default function ChatInterface({ friend, messages, user, onSendMessage }:
       
       {/* 消息输入框 */}
       <div className="bg-white p-4 border-t">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+        />
         <div className="flex items-center">
           <Textarea
             value={messageText}
@@ -90,25 +136,26 @@ export default function ChatInterface({ friend, messages, user, onSendMessage }:
             rows={1}
           />
 
-            <Paperclip className="h-5 w-5" />
             <Button 
               type="button" 
               size="icon" 
               variant="ghost" 
               className="h-10 w-10 rounded-full"
+              onClick={handleAttachClick}
             >
-            <span className="sr-only">Attach file</span>
+              <Paperclip className="h-5 w-5" />
+              <span className="sr-only">Attach file</span>
             </Button>
-          <Button 
-            type="button" 
-            onClick={handleSend} 
-            disabled={!messageText.trim()}
-            className="rounded-full h-10 w-10 p-2"
-          >
-            <Send className="h-5 w-5" />
-          </Button>
+            <Button 
+              type="button" 
+              onClick={handleSend} 
+              disabled={!messageText.trim()}
+              className="rounded-full h-10 w-10 p-2"
+            >
+              <Send className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
   );
 }
