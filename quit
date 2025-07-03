@@ -1,0 +1,59 @@
+[33mcommit 27e3611c6ac4bf3aa80346d8d6cb9969e8b75e31[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Thu Jul 3 17:09:51 2025 +0800
+
+    让windsurf写了下文件传输，全是bug
+
+[33mcommit 7667fe92f89d25ca5f687af62f2c1a9c3c26b88a[m[33m ([m[1;31morigin/master[m[33m)[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Thu Jul 3 16:58:39 2025 +0800
+
+    fixbug&加密聊天数据
+
+[33mcommit 09382ecef213c7e59e4075affadd82e5cf1bcc10[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Thu Jul 3 15:32:09 2025 +0800
+
+    add online&offline model
+
+[33mcommit a98cb94af7ffdd77f7d85c9a85638361bd362ed0[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Thu Jul 3 15:02:03 2025 +0800
+
+    add ip&port data
+
+[33mcommit 843fd0342969378545223e6f6fe3d41a76404e2f[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Wed Jul 2 18:28:42 2025 +0800
+
+    去除模拟数据，添加了真实的信息收发和用户列表逻辑
+
+[33mcommit 053b444e41af6edd29685bcdfc6518949a3cdc45[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Wed Jul 2 16:43:23 2025 +0800
+
+    add chatpage
+
+[33mcommit 6a581df312d00447a5fe74c21496023de9451cbc[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Tue Jul 1 15:29:48 2025 +0800
+
+    注册/登录成功对接后端
+
+[33mcommit 55494e759988a3736430586e3315e198d1ce33e1[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Tue Jul 1 11:58:03 2025 +0800
+
+    尝试使用BEF模式更新登录状态
+
+[33mcommit a5b2146fa84eb6b7dd4fea0ce85bf08c41275871[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Tue Jul 1 10:53:59 2025 +0800
+
+    login/register
+
+[33mcommit a8276659cb075cf2e575b713268161cdca45ae63[m
+Author: qhzx-cjz <3101647406@qq.com>
+Date:   Tue Jul 1 10:14:52 2025 +0800
+
+    Initial commit from create-remix

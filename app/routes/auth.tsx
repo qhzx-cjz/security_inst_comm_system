@@ -56,13 +56,14 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       const data = await response.json();
-      const accessToken = data.accessToken;
+      const { accessToken, user } = data;
 
-      if (!accessToken) {
-        throw new Error("从后端返回的数据中未找到 accessToken");
+      if (!accessToken || !user) {
+        throw new Error("从后端返回的数据中缺少 accessToken 或 user 对象");
       }
 
-      return await createUserSession(accessToken, "/chat");
+      // 使用新的会话创建函数，传入完整的用户数据和Token
+      return await createUserSession({ token: accessToken, user }, "/chat");
 
     }
     
