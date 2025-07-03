@@ -31,7 +31,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const sessionUser = await getSessionUser(request);
   if (!sessionUser) {
     return redirect("/auth");
-  }
+  } 
 
   const token = await getAuthToken(request);
   if (!token) {
@@ -185,6 +185,7 @@ export default function ChatRoute() {
             friend={selectedFriend}
             messages={messages[selectedFriend.id] || []}
             onSendMessage={handleSendMessage}
+            user={user} 
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
