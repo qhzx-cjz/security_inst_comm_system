@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
-import { Send } from 'lucide-react';
+import { Send, Paperclip} from 'lucide-react';
 import type { Friend, Message } from '~/routes/chat'; // 从chat.tsx导入类型
 
 interface ChatInterfaceProps {
@@ -54,7 +54,6 @@ export default function ChatInterface({ friend, messages, user, onSendMessage }:
       <div className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-4">
           {messages.map((message) => {
-            // --- 核心逻辑修改在这里 ---
             // 判断消息是否由当前登录用户发送
             const isMe = message.senderId === user.username;
             
@@ -63,7 +62,7 @@ export default function ChatInterface({ friend, messages, user, onSendMessage }:
                 <div 
                   className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
                     isMe 
-                      ? 'bg-primary text-primary-foreground rounded-br-none' // 我发出的消息：蓝色背景，白色文字
+                      ? 'bg-primary text-primary-foreground rounded-br-none' // 我发出的消息：深色背景，白色文字
                       : 'bg-card text-card-foreground rounded-bl-none'      // 接收到的消息：白色背景，深色文字
                   }`}
                 >
@@ -86,10 +85,20 @@ export default function ChatInterface({ friend, messages, user, onSendMessage }:
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${friend.name}...`}
+            placeholder={`Message ${friend.name} from ${friend.ip}:${friend.port}...`}
             className="flex-1 resize-none border-gray-300 rounded-lg mr-4"
             rows={1}
           />
+
+            <Paperclip className="h-5 w-5" />
+            <Button 
+              type="button" 
+              size="icon" 
+              variant="ghost" 
+              className="h-10 w-10 rounded-full"
+            >
+            <span className="sr-only">Attach file</span>
+            </Button>
           <Button 
             type="button" 
             onClick={handleSend} 
